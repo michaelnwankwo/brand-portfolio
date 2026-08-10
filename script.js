@@ -1,19 +1,27 @@
 /**
- * FlowBook Studio — Production JS
- * - Mobile nav toggle
- * - 3D Focus Deck slider (perspective, drag, snap, dots, filter)
- * - Category filter state machine (two-phase)
- * - Counters + FAQ accordion + Scroll Reveal
+ * FlowBook Studio — Production JS (v3: swipe fixed)
+ * - History scrollRestoration manual, no reload jump
+ * - Direction-locked pointer drag: horizontal swipes deck, vertical scrolls page
+ * - CSS touch-action: pan-y on deck
+ * - 3D Deck: GPU rotateY/scale/opacity, snap on >40px or velocity
+ * - Filter, dots, nav, counters, FAQ, reveal — complete
  */
 (() => {
   "use strict";
+
+  /* ── 0) RESET SCROLL — before any layout ── */
+  try {
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  } catch {}
+  if (!location.hash) window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+
   const $ = (s, c = document) => c.querySelector(s);
   const $$ = (s, c = document) => [...c.querySelectorAll(s)];
   const prefersReducedMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   ).matches;
 
-  /* 1) Mobile Nav */
+  /* ── 1) Mobile Nav ── */
   const navToggle = $(".nav-toggle"),
     mobileNav = $("#mobile-nav");
   if (navToggle && mobileNav) {
@@ -41,12 +49,12 @@
     });
   }
 
-  /* 2) Counters */
+  /* ── 2) Counters ── */
   const statNums = $$(".stat-num");
   function animateCount(el) {
     const target = parseFloat(el.dataset.count),
-      suffix = el.dataset.suffix || "",
-      isFloat = String(target).includes("."),
+      suffix = el.dataset.suffix || "";
+    const isFloat = String(target).includes("."),
       duration = prefersReducedMotion ? 0 : 1400;
     if (duration === 0) {
       el.textContent = target + suffix;
@@ -81,7 +89,7 @@
     } else statNums.forEach(animateCount);
   }
 
-  /* 3) FAQ — single-open */
+  /* ── 3) FAQ ── */
   const accordionItems = $$(".accordion-item"),
     triggers = $$(".accordion-trigger");
   function closeItem(item) {
@@ -123,23 +131,22 @@
       }
     });
 
-  /* 4) 3D FOCUS DECK — core */
+  /* ── 4) 3D FOCUS DECK ── */
   const deck = $("#deck"),
     dotsWrap = $(".deck-dots"),
     prevBtn = $(".deck-prev"),
     nextBtn = $(".deck-next");
   const filterTabs = $$(".filter-tab"),
     statusEl = $("#filter-status");
-  let deckCards = $$(".deck-card", deck);
-  let activeIndex = 0;
-  let isAnimatingFilter = false;
-  let currentFilter = "all";
+  let deckCards = deck ? $$(".deck-card", deck) : [];
+  let activeIndex = 0,
+    isAnimatingFilter = false,
+    currentFilter = "all";
 
   function visibleCards() {
     return deckCards.filter((c) => !c.classList.contains("is-hidden"));
   }
 
-  // Build dots
   function buildDots() {
     if (!dotsWrap) return;
     dotsWrap.innerHTML = "";
@@ -151,44 +158,42 @@
       b.setAttribute("role", "tab");
       b.setAttribute("aria-label", `Go to project ${i + 1} of ${vis.length}`);
       b.setAttribute("aria-selected", String(i === activeIndex));
-      b.addEventListener("click", () => scrollToIndex(i));
-      // 48px hit area via padding wrapper — but visual is pill; enlarge hit via CSS? use extra invisible padding
       b.style.minHeight = "48px";
       b.style.minWidth = "48px";
       b.style.display = "grid";
       b.style.placeItems = "center";
-      // inner visual
+      b.style.background = "transparent";
+      b.style.border = "0";
+      b.style.padding = "0";
       const inner = document.createElement("span");
       inner.style.cssText =
-        "width:28px;height:8px;border-radius:999px;background:currentColor;display:block;transition:all .3s";
-      // color via parent? simpler reuse pill style — override
+        "width:28px;height:8px;border-radius:999px;display:block;transition:all .3s";
       b.appendChild(inner);
-      // style active via data
+      b._inner = inner;
       if (i === activeIndex) {
         b.style.color = "var(--obsidian)";
         inner.style.background = "var(--obsidian)";
         inner.style.width = "28px";
+        inner.style.border = "0";
       } else {
         b.style.color = "var(--border)";
         inner.style.background = "var(--surface)";
         inner.style.border = "1px solid var(--border)";
         inner.style.width = "16px";
       }
-      b._inner = inner;
+      b.addEventListener("click", () => scrollToIndex(i));
       dotsWrap.appendChild(b);
     });
-    // Update dots visual helper
     updateDots();
   }
   function updateDots() {
-    const dots = $$(".deck-dot", dotsWrap);
-    dots.forEach((d, i) => {
+    $$(".deck-dot", dotsWrap).forEach((d, i) => {
       const sel = i === activeIndex;
       d.setAttribute("aria-selected", String(sel));
       if (sel) {
         d.style.color = "var(--obsidian)";
         d._inner.style.background = "var(--obsidian)";
-        d._inner.style.borderColor = "var(--obsidian)";
+        d._inner.style.border = "0";
         d._inner.style.width = "28px";
       } else {
         d.style.color = "var(--border)";
@@ -209,7 +214,6 @@
     if (!vis.length) return;
     index = Math.max(0, Math.min(index, vis.length - 1));
     activeIndex = index;
-    // Remove classes
     deckCards.forEach((c) =>
       c.classList.remove("is-active", "is-prev", "is-next"),
     );
@@ -217,32 +221,32 @@
       if (i === activeIndex) card.classList.add("is-active");
       else if (i < activeIndex) card.classList.add("is-prev");
       else card.classList.add("is-next");
-      // Reduced motion fallback: no rotation
       if (prefersReducedMotion) {
         card.style.transform = "none";
         card.style.opacity = "1";
+      } else {
+        card.style.transform = "";
+        card.style.opacity = "";
       }
     });
     updateDots();
     updateNavButtons();
-    // Announce
     const title =
       vis[activeIndex]?.dataset.title || `Project ${activeIndex + 1}`;
     if (statusEl)
       statusEl.textContent = `${title} — ${activeIndex + 1} of ${vis.length}${currentFilter !== "all" ? " • filtered" : ""}`;
   }
+  // Deck-only scroll — never touches window.scrollY
   function scrollToIndex(index) {
     const vis = visibleCards();
     if (!vis[index]) return;
-    vis[index].scrollIntoView({
-      behavior: prefersReducedMotion ? "auto" : "smooth",
-      inline: "center",
-      block: "nearest",
-    });
-    // setActive will be handled by scroll observer, but set immediately for responsiveness
+    const left =
+      vis[index].offsetLeft - (deck.clientWidth - vis[index].offsetWidth) / 2;
+    deck.scrollTo({ left, behavior: prefersReducedMotion ? "auto" : "smooth" });
     setActiveByIndex(index);
   }
-  // Detect closest to center on scroll
+
+  // Center detection (rAF throttled, passive)
   let ticking = false;
   function onDeckScroll() {
     if (ticking) return;
@@ -253,55 +257,149 @@
         ticking = false;
         return;
       }
+      // ignore while user is dragging (we handle snap on release)
+      if (isDown && lockAxis === "x") {
+        ticking = false;
+        return;
+      }
       const deckRect = deck.getBoundingClientRect();
       const center = deckRect.left + deckRect.width / 2;
       let bestIdx = 0,
         bestDist = Infinity;
       vis.forEach((card, i) => {
         const r = card.getBoundingClientRect();
-        const c = r.left + r.width / 2;
-        const d = Math.abs(center - c);
+        const d = Math.abs(r.left + r.width / 2 - center);
         if (d < bestDist) {
           bestDist = d;
           bestIdx = i;
         }
       });
-      if (bestIdx !== activeIndex) {
-        setActiveByIndex(bestIdx);
-      }
+      if (bestIdx !== activeIndex) setActiveByIndex(bestIdx);
       ticking = false;
     });
   }
-  // Pointer drag — enhance native scroll with grab
+
+  // ── High-performance drag: pan-y passthrough, pan-x swipes deck ──
   let isDown = false,
+    isDragging = false,
+    lockAxis = null,
     startX = 0,
-    scrollLeft = 0;
+    startY = 0,
+    startScrollLeft = 0,
+    startTime = 0;
   if (deck) {
     deck.addEventListener("scroll", onDeckScroll, { passive: true });
-    deck.addEventListener("pointerdown", (e) => {
-      isDown = true;
-      deck.setPointerCapture(e.pointerId);
-      startX = e.clientX;
-      scrollLeft = deck.scrollLeft;
-      deck.style.cursor = "grabbing";
-      deck.style.userSelect = "none";
-    });
-    deck.addEventListener("pointermove", (e) => {
-      if (!isDown) return;
-      e.preventDefault();
-      const x = e.clientX;
-      const walk = x - startX;
-      deck.scrollLeft = scrollLeft - walk;
-    });
-    const endDrag = () => {
-      isDown = false;
+
+    deck.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        isDown = true;
+        isDragging = false;
+        lockAxis = null;
+        startX = e.clientX;
+        startY = e.clientY;
+        startTime = e.timeStamp;
+        startScrollLeft = deck.scrollLeft;
+        deck.style.cursor = "grabbing";
+        // don't capture yet — wait for axis lock
+      },
+      { passive: true },
+    );
+
+    deck.addEventListener(
+      "pointermove",
+      (e) => {
+        if (!isDown) return;
+        const dx = e.clientX - startX,
+          dy = e.clientY - startY;
+
+        if (!lockAxis) {
+          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; // dead zone
+          lockAxis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+          if (lockAxis === "y") {
+            // yield to page scroll
+            isDown = false;
+            isDragging = false;
+            deck.style.cursor = "";
+            return;
+          }
+          // horizontal → take control
+          isDragging = true;
+          try {
+            deck.setPointerCapture(e.pointerId);
+          } catch {}
+          deck.style.userSelect = "none";
+          deck.style.scrollSnapType = "none"; // free drag without snap fighting
+          deck.style.scrollBehavior = "auto";
+        }
+
+        if (lockAxis === "x" && isDragging) {
+          e.preventDefault(); // only horizontal blocks default
+          deck.scrollLeft = startScrollLeft - dx;
+          // live 3D feedback — update nearest during drag for rotateY effect
+          // lightweight: reuse onDeckScroll logic without rAF throttle for immediacy
+          const vis = visibleCards();
+          const deckRect = deck.getBoundingClientRect();
+          const center = deckRect.left + deckRect.width / 2;
+          let bestIdx = activeIndex,
+            bestDist = Infinity;
+          vis.forEach((card, i) => {
+            const r = card.getBoundingClientRect();
+            const d = Math.abs(r.left + r.width / 2 - center);
+            if (d < bestDist) {
+              bestDist = d;
+              bestIdx = i;
+            }
+          });
+          if (bestIdx !== activeIndex) setActiveByIndex(bestIdx);
+        }
+      },
+      { passive: false },
+    );
+
+    const endDrag = (e) => {
+      if (!isDown && !isDragging && !lockAxis) return;
+      const wasDragging = isDragging,
+        wasLock = lockAxis;
+      const dx = isDown || wasDragging ? e.clientX - startX : 0;
+      const dt = Math.max(1, e.timeStamp - startTime);
+      const velocity = Math.abs(dx) / dt; // px/ms
+
+      // restore snap before snapping
+      deck.style.scrollSnapType = "";
+      deck.style.scrollBehavior = "";
       deck.style.cursor = "";
       deck.style.userSelect = "";
+      try {
+        deck.releasePointerCapture(e.pointerId);
+      } catch {}
+
+      isDown = false;
+      isDragging = false;
+      lockAxis = null;
+
+      if (wasLock === "x" && wasDragging) {
+        // threshold: 40px or flick velocity >0.45
+        if (Math.abs(dx) > 40 || velocity > 0.45) {
+          if (dx < 0) scrollToIndex(activeIndex + 1);
+          else scrollToIndex(activeIndex - 1);
+        } else {
+          // snap to nearest
+          scrollToIndex(activeIndex);
+        }
+      }
     };
     deck.addEventListener("pointerup", endDrag);
     deck.addEventListener("pointercancel", endDrag);
-    deck.addEventListener("pointerleave", endDrag);
-    // Keyboard
+    deck.addEventListener("pointerleave", (e) => {
+      // if dragging and leaves, treat as end
+      if (isDragging) endDrag(e);
+    });
+
+    // Also support touch fallback for older iOS (pointer covers it, but keep for safety)
+    // No extra listeners needed — pointer events unify
+
     deck.addEventListener("keydown", (e) => {
       if (e.key === "ArrowRight") {
         e.preventDefault();
@@ -318,7 +416,7 @@
   if (nextBtn)
     nextBtn.addEventListener("click", () => scrollToIndex(activeIndex + 1));
 
-  // Filter state machine — two-phase
+  // Filter — two-phase, CLS-safe
   function updateTabStates(active) {
     filterTabs.forEach((t) => {
       const isActive = t.dataset.filter === active;
@@ -336,9 +434,7 @@
       toShow = [];
     deckCards.forEach((card) => {
       const cat = card.dataset.category;
-      const matches = filter === "all" || cat === filter;
-      if (matches) toShow.push(card);
-      else toHide.push(card);
+      (filter === "all" || cat === filter ? toShow : toHide).push(card);
     });
     if (prefersReducedMotion) {
       deckCards.forEach((c) => {
@@ -349,14 +445,12 @@
       activeIndex = 0;
       buildDots();
       setActiveByIndex(0);
-      // scroll to start
       deck.scrollTo({ left: 0, behavior: "auto" });
       if (statusEl)
         statusEl.textContent = `Showing ${toShow.length} projects${filter !== "all" ? ` in ${filter}` : ""}.`;
       isAnimatingFilter = false;
       return;
     }
-    // Phase 1: fade out
     toHide.forEach((c) => {
       c.classList.remove("is-entering");
       c.classList.add("is-hiding");
@@ -379,12 +473,10 @@
         void c.offsetWidth;
         c.classList.add("is-entering");
       });
-      // rebuild dots & reset active
       activeIndex = 0;
       buildDots();
       setActiveByIndex(0);
       deck.scrollTo({ left: 0, behavior: "smooth" });
-      // announce
       if (statusEl)
         statusEl.textContent = `Showing ${toShow.length} projects${filter !== "all" ? ` in ${filter}` : ""} — swipe the deck.`;
       setTimeout(() => {
@@ -409,99 +501,88 @@
       }
     });
   });
-  // Init deck
+
   function initDeck() {
+    if (!deck) return;
     deckCards = $$(".deck-card", deck);
     buildDots();
     setActiveByIndex(0);
-    // Ensure first card centered after layout
-    requestAnimationFrame(() => {
-      // wait for CSS
-      setTimeout(() => {
-        const vis = visibleCards();
-        if (vis[0])
-          vis[0].scrollIntoView({
-            inline: "center",
-            block: "nearest",
-            behavior: "auto",
-          });
-        onDeckScroll();
-      }, 80);
-    });
+    deck.scrollLeft = 0;
+    requestAnimationFrame(onDeckScroll);
   }
-  if (deck) initDeck();
-  // Rebuild on resize (debounced)
-  let resizeTimer;
-  window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      if (window.innerWidth >= 880 && navToggle && mobileNav) {
-        navToggle.setAttribute("aria-expanded", "false");
-        mobileNav.hidden = true;
-      }
-      onDeckScroll();
-    }, 120);
+  function boot() {
+    if (!location.hash)
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    initDeck();
+  }
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+  window.addEventListener("load", () => {
+    if (!location.hash)
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   });
+  let resizeTimer;
+  window.addEventListener(
+    "resize",
+    () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (window.innerWidth >= 880 && navToggle && mobileNav) {
+          navToggle.setAttribute("aria-expanded", "false");
+          mobileNav.hidden = true;
+        }
+        onDeckScroll();
+      }, 120);
+    },
+    { passive: true },
+  );
 
-  /* 5) Scroll Reveal & Hero load */
+  /* ── 5) Reveal ── */
   if (!prefersReducedMotion) {
     const heroSeq = [
-      { sel: ".badge-row", variant: "hero-load hero-load-up", delay: 0 },
-      { sel: ".hero-title", variant: "hero-load hero-load-up", delay: 90 },
-      { sel: ".hero-sub", variant: "hero-load hero-load-up", delay: 180 },
-      { sel: ".hero-ctas", variant: "hero-load hero-load-up", delay: 260 },
-      {
-        sel: ".hero-social-proof",
-        variant: "hero-load hero-load-up",
-        delay: 340,
-      },
-      { sel: ".hero-stats", variant: "hero-load hero-load-up", delay: 420 },
+      { sel: ".badge-row", v: "hero-load hero-load-up", d: 0 },
+      { sel: ".hero-title", v: "hero-load hero-load-up", d: 90 },
+      { sel: ".hero-sub", v: "hero-load hero-load-up", d: 180 },
+      { sel: ".hero-ctas", v: "hero-load hero-load-up", d: 260 },
+      { sel: ".hero-social-proof", v: "hero-load hero-load-up", d: 340 },
+      { sel: ".hero-stats", v: "hero-load hero-load-up", d: 420 },
       {
         sel: ".hero-visual .phone-stack",
-        variant: "hero-load hero-load-scale",
-        delay: 380,
+        v: "hero-load hero-load-scale",
+        d: 380,
       },
-      {
-        sel: ".hero-visual-caption",
-        variant: "hero-load hero-load-up",
-        delay: 520,
-      },
+      { sel: ".hero-visual-caption", v: "hero-load hero-load-up", d: 520 },
     ];
-    heroSeq.forEach(({ sel, variant, delay }) => {
+    heroSeq.forEach(({ sel, v, d }) => {
       const el = $(sel);
       if (el) {
-        el.classList.add(...variant.split(" "));
-        el.style.animationDelay = delay + "ms";
+        el.classList.add(...v.split(" "));
+        el.style.animationDelay = d + "ms";
       }
     });
-    const revealGroups = [
+    const groups = [
       { sel: ".problem-solution .section-head", cls: "reveal reveal-up" },
       { sel: ".showcase .section-head", cls: "reveal reveal-up" },
       { sel: ".process .section-head", cls: "reveal reveal-up" },
       { sel: ".faq .faq-intro", cls: "reveal reveal-left" },
       { sel: ".final-cta .final-copy", cls: "reveal reveal-left" },
       { sel: ".compare-card.before", cls: "reveal reveal-left" },
-      { sel: ".compare-card.after", cls: "reveal reveal-right", stagger: 80 },
-      { sel: ".process-step", cls: "reveal reveal-up", stagger: 90 },
+      { sel: ".compare-card.after", cls: "reveal reveal-right", s: 80 },
+      { sel: ".process-step", cls: "reveal reveal-up", s: 90 },
       { sel: ".process-guarantee", cls: "reveal reveal-up" },
       { sel: ".filter-bar", cls: "reveal reveal-up" },
-      { sel: ".trust-card", cls: "reveal reveal-left", stagger: 70 },
-      { sel: ".accordion-item", cls: "reveal reveal-up", stagger: 60 },
+      { sel: ".trust-card", cls: "reveal reveal-left", s: 70 },
+      { sel: ".accordion-item", cls: "reveal reveal-up", s: 60 },
       { sel: ".final-proof .proof-card", cls: "reveal reveal-right" },
-      {
-        sel: ".site-footer .footer-inner > *",
-        cls: "reveal reveal-up",
-        stagger: 80,
-      },
     ];
-    revealGroups.forEach((g) => {
+    groups.forEach((g) =>
       $$(g.sel).forEach((el, i) => {
         if (el.classList.contains("hero-load")) return;
         el.classList.add(...g.cls.split(" "));
-        if (g.stagger) el.style.transitionDelay = i * g.stagger + "ms";
-      });
-    });
-    const revealEls = $$(".reveal");
+        if (g.s) el.style.transitionDelay = i * g.s + "ms";
+      }),
+    );
     const ioReveal = new IntersectionObserver(
       (ents) => {
         ents.forEach((en) => {
@@ -513,35 +594,13 @@
       },
       { threshold: 0.14, rootMargin: "0px 0px -40px 0px" },
     );
-    revealEls.forEach((el) => ioReveal.observe(el));
-    const finalBtn = $(".final-actions .btn-primary");
-    if (finalBtn) {
-      const ioBtn = new IntersectionObserver(
-        (ents) => {
-          ents.forEach((e) => {
-            if (e.isIntersecting) {
-              e.target.classList.add("is-visible");
-              ioBtn.unobserve(e.target);
-            }
-          });
-        },
-        { threshold: 0.5 },
-      );
-      ioBtn.observe(finalBtn);
-    }
+    $$(".reveal").forEach((el) => ioReveal.observe(el));
   } else {
     $$(".reveal,.hero-load").forEach((el) => el.classList.add("is-visible"));
-    // ensure deck inactive styles are non-3D
-    deckCards.forEach((c) => {
-      c.style.transform = "none";
-      c.style.opacity = "1";
-    });
   }
 
   console.log(
-    "[FlowBook Studio] Ready — deck: %d cards, filters: %d, accordion: %d",
+    "[FlowBook Studio] v3 swipe fixed — deck: %d cards",
     deckCards.length,
-    filterTabs.length,
-    accordionItems.length,
   );
 })();
