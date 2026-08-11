@@ -1,10 +1,12 @@
 /**
- * FlowBook Studio — Production JS (v3: swipe fixed)
- * - History scrollRestoration manual, no reload jump
+ * FlowBook Studio — Production JS (v4: load-jump fixed)
+ * - History scrollRestoration manual + working pin-to-top (no reload jump to Projects)
  * - Direction-locked pointer drag: horizontal swipes deck, vertical scrolls page
  * - CSS touch-action: pan-y on deck
  * - 3D Deck: GPU rotateY/scale/opacity, snap on >40px or velocity
  * - Filter, dots, nav, counters, FAQ, reveal — complete
+ * - Deck scroll APIs deferred until the deck is on-screen (Chrome/Safari no longer
+ *   scroll the page down to #deck / “All FlowBook Projects” on first paint)
  */
 (() => {
   "use strict";
@@ -13,13 +15,39 @@
   try {
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   } catch {}
-  if (!location.hash) window.scrollTo({ top: 0, left: 0, behavior: "instant" });
 
   const $ = (s, c = document) => c.querySelector(s);
   const $$ = (s, c = document) => [...c.querySelectorAll(s)];
   const prefersReducedMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   ).matches;
+
+  /* Hash like #showcase / #deck is an intentional jump. Empty / bare # is not. */
+  function hasIntentionalHash() {
+    const h = location.hash;
+    return !!h && h !== "#";
+  }
+
+  /**
+   * Pin the window to the top without losing to CSS `scroll-behavior: smooth`
+   * or an ignored `{ behavior: "instant" }` (unsupported in older Chromium/WebKit).
+   * The 2-arg scrollTo form is universally honoured.
+   */
+  function pinTop() {
+    if (hasIntentionalHash()) return;
+    const html = document.documentElement;
+    const prev = html.style.scrollBehavior;
+    html.style.scrollBehavior = "auto";
+    window.scrollTo(0, 0);
+    html.style.scrollBehavior = prev;
+  }
+
+  /* Freeze smooth-scroll on <html> until after load so boot resets aren't animated. */
+  const htmlEl = document.documentElement;
+  const prevHtmlScrollBehavior = htmlEl.style.scrollBehavior;
+  htmlEl.style.scrollBehavior = "auto";
+
+  pinTop();
 
   /* ── 1) Mobile Nav ── */
   const navToggle = $(".nav-toggle"),
@@ -141,10 +169,40 @@
   let deckCards = deck ? $$(".deck-card", deck) : [];
   let activeIndex = 0,
     isAnimatingFilter = false,
-    currentFilter = "all";
+    currentFilter = "all",
+    deckReady = false;
 
   function visibleCards() {
     return deckCards.filter((c) => !c.classList.contains("is-hidden"));
+  }
+
+  function deckIsOnScreen() {
+    if (!deck) return false;
+    const r = deck.getBoundingClientRect();
+    return r.bottom > 0 && r.top < (window.innerHeight || 0);
+  }
+
+  /**
+   * Programmatic scroll on an off-screen overflow scroller makes Chrome/Safari
+   * scroll that scroller into view — that's the "jumps to Projects" bug.
+   * Only call scroll APIs when the deck is already visible, or the URL hash
+   * asked for the showcase.
+   */
+  function canScrollDeck() {
+    if (!deck) return false;
+    if (deckReady || deckIsOnScreen()) return true;
+    const h = location.hash;
+    return h === "#showcase" || h === "#deck";
+  }
+
+  function scrollDeckTo(left, behavior) {
+    if (!deck) return;
+    if (!canScrollDeck()) return;
+    if (typeof deck.scrollTo === "function") {
+      deck.scrollTo({ left, behavior: behavior || "auto" });
+    } else {
+      deck.scrollLeft = left;
+    }
   }
 
   function buildDots() {
@@ -209,7 +267,8 @@
     prevBtn.disabled = activeIndex === 0;
     nextBtn.disabled = activeIndex === vis.length - 1;
   }
-  function setActiveByIndex(index) {
+  function setActiveByIndex(index, opts) {
+    const silent = !!(opts && opts.silent);
     const vis = visibleCards();
     if (!vis.length) return;
     index = Math.max(0, Math.min(index, vis.length - 1));
@@ -233,7 +292,8 @@
     updateNavButtons();
     const title =
       vis[activeIndex]?.dataset.title || `Project ${activeIndex + 1}`;
-    if (statusEl)
+    /* Skip the first paint write — Safari/AT scroll aria-live regions into view. */
+    if (statusEl && !silent)
       statusEl.textContent = `${title} — ${activeIndex + 1} of ${vis.length}${currentFilter !== "all" ? " • filtered" : ""}`;
   }
   function scrollToIndex(index) {
@@ -241,7 +301,7 @@
     if (!vis[index]) return;
     const left =
       vis[index].offsetLeft - (deck.clientWidth - vis[index].offsetWidth) / 2;
-    deck.scrollTo({ left, behavior: prefersReducedMotion ? "auto" : "smooth" });
+    scrollDeckTo(left, prefersReducedMotion ? "auto" : "smooth");
     setActiveByIndex(index);
   }
 
@@ -284,6 +344,13 @@
     startScrollLeft = 0,
     startTime = 0;
   if (deck) {
+    /* Kill scroll-anchoring so later layout (lazy images) cannot pull the page here. */
+    deck.style.overflowAnchor = "none";
+    const deckWrap = deck.closest(".deck-wrap");
+    const showcase = deck.closest(".showcase");
+    if (deckWrap) deckWrap.style.overflowAnchor = "none";
+    if (showcase) showcase.style.overflowAnchor = "none";
+
     deck.addEventListener("scroll", onDeckScroll, { passive: true });
 
     deck.addEventListener(
@@ -441,7 +508,7 @@
       activeIndex = 0;
       buildDots();
       setActiveByIndex(0);
-      deck.scrollTo({ left: 0, behavior: "auto" });
+      scrollDeckTo(0, "auto");
       if (statusEl)
         statusEl.textContent = `Showing ${toShow.length} projects${filter !== "all" ? ` in ${filter}` : ""}.`;
       isAnimatingFilter = false;
@@ -472,7 +539,7 @@
       activeIndex = 0;
       buildDots();
       setActiveByIndex(0);
-      deck.scrollTo({ left: 0, behavior: "smooth" });
+      scrollDeckTo(0, "smooth");
       if (statusEl)
         statusEl.textContent = `Showing ${toShow.length} projects${filter !== "all" ? ` in ${filter}` : ""} — swipe the deck.`;
       setTimeout(() => {
@@ -498,26 +565,71 @@
     });
   });
 
+  function markDeckReadyAndAlign() {
+    if (!deck || deckReady) return;
+    deckReady = true;
+    scrollDeckTo(0, "auto");
+    requestAnimationFrame(onDeckScroll);
+  }
+
+  function scheduleDeckAlign() {
+    if (!deck) return;
+    /* If the user asked for the showcase via hash, align immediately. */
+    if (location.hash === "#showcase" || location.hash === "#deck") {
+      markDeckReadyAndAlign();
+      return;
+    }
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver(
+        (ents) => {
+          if (ents.some((en) => en.isIntersecting)) {
+            io.disconnect();
+            markDeckReadyAndAlign();
+          }
+        },
+        { rootMargin: "160px 0px", threshold: 0.01 },
+      );
+      io.observe(deck);
+    } else {
+      /* No IO: wait until the user has actually scrolled near the deck. */
+      const onWinScroll = () => {
+        if (deckIsOnScreen()) {
+          window.removeEventListener("scroll", onWinScroll);
+          markDeckReadyAndAlign();
+        }
+      };
+      window.addEventListener("scroll", onWinScroll, { passive: true });
+    }
+  }
+
   function initDeck() {
     if (!deck) return;
     deckCards = $$(".deck-card", deck);
     buildDots();
-    setActiveByIndex(0);
-    deck.scrollLeft = 0;
-    requestAnimationFrame(onDeckScroll);
+    /* Silent: do not write aria-live on first paint (that also jumps Safari). */
+    setActiveByIndex(0, { silent: true });
+    /* Do NOT set deck.scrollLeft / deck.scrollTo here — that is the load jump. */
+    scheduleDeckAlign();
   }
   function boot() {
-    if (!location.hash)
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    pinTop();
     initDeck();
   }
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", boot);
   else boot();
+
   window.addEventListener("load", () => {
-    if (!location.hash)
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    pinTop();
+    htmlEl.style.scrollBehavior = prevHtmlScrollBehavior;
+    htmlEl.classList.add("is-ready");
   });
+
+  /* Restore-from-bfcache (Safari back/forward) can re-land on Projects. */
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) pinTop();
+  });
+
   let resizeTimer;
   window.addEventListener(
     "resize",
@@ -595,7 +707,7 @@
   }
 
   console.log(
-    "[FlowBook Studio] v3 swipe fixed — deck: %d cards",
+    "[FlowBook Studio] v4 load-jump fixed — deck: %d cards",
     deckCards.length,
   );
 })();
