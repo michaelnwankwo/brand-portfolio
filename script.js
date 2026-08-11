@@ -236,7 +236,6 @@
     if (statusEl)
       statusEl.textContent = `${title} — ${activeIndex + 1} of ${vis.length}${currentFilter !== "all" ? " • filtered" : ""}`;
   }
-  // Deck-only scroll — never touches window.scrollY
   function scrollToIndex(index) {
     const vis = visibleCards();
     if (!vis[index]) return;
@@ -246,7 +245,6 @@
     setActiveByIndex(index);
   }
 
-  // Center detection (rAF throttled, passive)
   let ticking = false;
   function onDeckScroll() {
     if (ticking) return;
@@ -257,7 +255,6 @@
         ticking = false;
         return;
       }
-      // ignore while user is dragging (we handle snap on release)
       if (isDown && lockAxis === "x") {
         ticking = false;
         return;
@@ -279,7 +276,6 @@
     });
   }
 
-  // ── High-performance drag: pan-y passthrough, pan-x swipes deck ──
   let isDown = false,
     isDragging = false,
     lockAxis = null,
@@ -302,7 +298,6 @@
         startTime = e.timeStamp;
         startScrollLeft = deck.scrollLeft;
         deck.style.cursor = "grabbing";
-        // don't capture yet — wait for axis lock
       },
       { passive: true },
     );
@@ -313,32 +308,26 @@
         if (!isDown) return;
         const dx = e.clientX - startX,
           dy = e.clientY - startY;
-
         if (!lockAxis) {
-          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; // dead zone
+          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
           lockAxis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
           if (lockAxis === "y") {
-            // yield to page scroll
             isDown = false;
             isDragging = false;
             deck.style.cursor = "";
             return;
           }
-          // horizontal → take control
           isDragging = true;
           try {
             deck.setPointerCapture(e.pointerId);
           } catch {}
           deck.style.userSelect = "none";
-          deck.style.scrollSnapType = "none"; // free drag without snap fighting
+          deck.style.scrollSnapType = "none";
           deck.style.scrollBehavior = "auto";
         }
-
         if (lockAxis === "x" && isDragging) {
-          e.preventDefault(); // only horizontal blocks default
+          e.preventDefault();
           deck.scrollLeft = startScrollLeft - dx;
-          // live 3D feedback — update nearest during drag for rotateY effect
-          // lightweight: reuse onDeckScroll logic without rAF throttle for immediacy
           const vis = visibleCards();
           const deckRect = deck.getBoundingClientRect();
           const center = deckRect.left + deckRect.width / 2;
@@ -364,9 +353,7 @@
         wasLock = lockAxis;
       const dx = isDown || wasDragging ? e.clientX - startX : 0;
       const dt = Math.max(1, e.timeStamp - startTime);
-      const velocity = Math.abs(dx) / dt; // px/ms
-
-      // restore snap before snapping
+      const velocity = Math.abs(dx) / dt;
       deck.style.scrollSnapType = "";
       deck.style.scrollBehavior = "";
       deck.style.cursor = "";
@@ -374,18 +361,14 @@
       try {
         deck.releasePointerCapture(e.pointerId);
       } catch {}
-
       isDown = false;
       isDragging = false;
       lockAxis = null;
-
       if (wasLock === "x" && wasDragging) {
-        // threshold: 40px or flick velocity >0.45
         if (Math.abs(dx) > 40 || velocity > 0.45) {
           if (dx < 0) scrollToIndex(activeIndex + 1);
           else scrollToIndex(activeIndex - 1);
         } else {
-          // snap to nearest
           scrollToIndex(activeIndex);
         }
       }
@@ -393,12 +376,8 @@
     deck.addEventListener("pointerup", endDrag);
     deck.addEventListener("pointercancel", endDrag);
     deck.addEventListener("pointerleave", (e) => {
-      // if dragging and leaves, treat as end
       if (isDragging) endDrag(e);
     });
-
-    // Also support touch fallback for older iOS (pointer covers it, but keep for safety)
-    // No extra listeners needed — pointer events unify
 
     deck.addEventListener("keydown", (e) => {
       if (e.key === "ArrowRight") {
@@ -410,13 +389,30 @@
         scrollToIndex(activeIndex - 1);
       }
     });
+
+    // ── Side-card tap to focus ──
+    deck.addEventListener(
+      "click",
+      (e) => {
+        const card = e.target.closest(".deck-card");
+        if (!card) return;
+        const vis = visibleCards();
+        const idx = vis.indexOf(card);
+        if (idx === -1 || idx === activeIndex) return;
+        if (isDragging || Math.abs(e.clientX - startX) > 10) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.target.closest("a")) e.stopImmediatePropagation();
+        scrollToIndex(idx);
+      },
+      true,
+    );
   }
   if (prevBtn)
     prevBtn.addEventListener("click", () => scrollToIndex(activeIndex - 1));
   if (nextBtn)
     nextBtn.addEventListener("click", () => scrollToIndex(activeIndex + 1));
 
-  // Filter — two-phase, CLS-safe
   function updateTabStates(active) {
     filterTabs.forEach((t) => {
       const isActive = t.dataset.filter === active;
@@ -538,7 +534,6 @@
     { passive: true },
   );
 
-  /* ── 5) Reveal ── */
   if (!prefersReducedMotion) {
     const heroSeq = [
       { sel: ".badge-row", v: "hero-load hero-load-up", d: 0 },

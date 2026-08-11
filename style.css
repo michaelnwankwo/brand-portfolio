@@ -2198,6 +2198,79 @@ h3 {
   animation: shimmer 2.8s ease-in-out infinite 0.8s;
 }
 
+/* Floating WhatsApp CTA Bubble */
+.floating-cta-bubble {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 999;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--accent);
+  color: var(--obsidian);
+  padding: 14px 22px;
+  border-radius: 50px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow:
+    0 12px 32px rgba(0, 240, 255, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.12);
+  border: 1.5px solid rgba(0, 0, 0, 0.06);
+  transition:
+    transform 0.2s var(--ease),
+    box-shadow 0.2s var(--ease),
+    background 0.2s;
+  animation: floatPulse 2.4s ease-in-out infinite;
+  min-height: 48px;
+}
+.floating-cta-bubble:hover {
+  transform: translateY(-2px);
+  background: var(--accent-600);
+  box-shadow: 0 16px 40px rgba(0, 240, 255, 0.42);
+}
+.floating-cta-bubble:active {
+  transform: scale(0.97);
+}
+.floating-cta-bubble svg {
+  flex-shrink: 0;
+}
+@keyframes floatPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 12px 32px rgba(0, 240, 255, 0.35),
+      0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+  50% {
+    box-shadow:
+      0 16px 40px rgba(0, 240, 255, 0.48),
+      0 6px 16px rgba(0, 0, 0, 0.14);
+  }
+}
+@media (max-width: 480px) {
+  .floating-cta-bubble {
+    padding: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    justify-content: center;
+    gap: 0;
+    bottom: 20px;
+    right: 16px;
+  }
+  .floating-cta-bubble span {
+    display: none;
+  }
+  .floating-cta-bubble svg {
+    width: 26px;
+    height: 26px;
+  }
+}
+
 /* Utilities */
 @media (hover: hover) {
   .btn:hover {
