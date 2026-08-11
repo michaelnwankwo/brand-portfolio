@@ -208,10 +208,10 @@ h3 {
   transform: scale(0.97);
 }
 .btn-primary {
-  background: var(--obsidian);
-  color: #fff;
-  border-color: var(--obsidian);
-  box-shadow: 0 8px 20px rgba(10, 10, 11, 0.18);
+  background: var(--accent);
+  color: var(--obsidian);
+  border-color: var(--accent);
+  box-shadow: 0 10px 30px rgba(0, 240, 255, 0.35);
 }
 .btn-primary:hover {
   background: var(--obsidian-2);
