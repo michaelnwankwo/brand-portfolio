@@ -1,5 +1,5 @@
 /* ==========================================================================
-   FlowBook Studio — Minimalist High-Contrast + 3D Focus Deck
+   FlowBook Studio — Minimalist High-Contrast + 3D Focus Deck (v4 CRO)
    Mobile-first • Fluid to 4K • Production-ready
    Accent: #00F0FF (electric cyan)
    ========================================================================== */
@@ -49,10 +49,13 @@
   padding: 0;
 }
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   scroll-padding-top: var(--header-h);
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
+}
+html.is-ready {
+  scroll-behavior: smooth;
 }
 body {
   font-family:
@@ -213,8 +216,11 @@ h3 {
   border-color: var(--accent);
   box-shadow: 0 10px 30px rgba(0, 240, 255, 0.35);
 }
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary:focus-visible {
   background: var(--obsidian-2);
+  color: #ffffff;
+  border-color: var(--obsidian-2);
 }
 .btn-secondary {
   background: var(--surface);
@@ -499,7 +505,7 @@ h3 {
   margin-bottom: 18px;
 }
 .hero-title {
-  max-width: 14ch;
+  max-width: 28ch;
   margin-bottom: 16px;
 }
 .hero-sub {
@@ -513,7 +519,29 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
+}
+.hero-cta-note {
+  margin: 0 0 14px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--slate-500);
+}
+.hero-price {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--slate-700);
+  max-width: 54ch;
+  box-shadow: var(--shadow-sm);
+}
+.hero-price strong {
+  color: var(--obsidian);
+  font-weight: 800;
 }
 .hero-social-proof {
   display: flex;
@@ -1135,6 +1163,7 @@ h3 {
   background: var(--surface-2);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+  overflow-anchor: none;
 }
 .showcase-head-row {
   display: grid;
@@ -1224,6 +1253,7 @@ h3 {
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
   scroll-padding-inline: 16px;
+  overflow-anchor: none;
 }
 .deck::-webkit-scrollbar {
   display: none;
@@ -1243,9 +1273,9 @@ h3 {
   box-shadow: var(--shadow-sm);
   transform-style: preserve-3d;
   will-change: transform, opacity;
-  /* Inactive state: faded, scaled down, rotated */
-  opacity: 0.52;
-  transform: scale(0.88) rotateY(18deg);
+  /* Inactive state: readable, lightly rotated — no harsh fade */
+  opacity: 0.8;
+  transform: scale(0.94) rotateY(8deg);
   transition:
     transform 0.62s var(--ease-deck),
     opacity 0.62s var(--ease-deck),
@@ -1254,11 +1284,11 @@ h3 {
   transform-origin: center center;
 }
 .deck-card.is-next {
-  transform: scale(0.88) rotateY(-18deg);
+  transform: scale(0.94) rotateY(-10deg);
 }
 .deck-card.is-active {
   opacity: 1;
-  transform: scale(1.05) rotateY(0deg);
+  transform: scale(1.02) rotateY(0deg);
   border-color: var(--border);
   box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.14),
@@ -1317,8 +1347,8 @@ h3 {
     transform: translateY(16px) scale(0.96);
   }
   to {
-    opacity: 0.52;
-    transform: scale(0.88) rotateY(18deg);
+    opacity: 0.8;
+    transform: scale(0.94) rotateY(8deg);
   }
 }
 .deck-card.is-active.is-entering {
@@ -1331,7 +1361,7 @@ h3 {
   }
   to {
     opacity: 1;
-    transform: scale(1.05) rotateY(0deg);
+    transform: scale(1.02) rotateY(0deg);
   }
 }
 
@@ -1818,9 +1848,11 @@ h3 {
   border-color: var(--accent);
   box-shadow: 0 10px 30px rgba(0, 240, 255, 0.35);
 }
-.final-actions .btn-primary:hover {
+.final-actions .btn-primary:hover,
+.final-actions .btn-primary:focus-visible {
   background: var(--accent-600);
   border-color: var(--accent-600);
+  color: var(--obsidian);
 }
 .final-sub {
   margin-top: 12px;
@@ -1980,6 +2012,9 @@ h3 {
   }
   .hero-ctas .btn {
     width: 100%;
+    white-space: normal;
+    line-height: 1.25;
+    padding-block: 12px;
   }
   .hero-social-proof {
     padding: 14px 0;
