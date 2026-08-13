@@ -823,6 +823,30 @@ h3 {
   border-radius: 14px;
   background: var(--bg-soft);
 }
+/* Project phones share one crop box so every card image is the same height */
+.card-phone .screen-content {
+  padding-bottom: 14px;
+}
+.card-phone picture {
+  display: block;
+  width: calc(100% - 24px);
+  height: 168px;
+  margin: 10px 12px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  flex: 0 0 168px;
+  background: var(--bg-soft);
+}
+.card-phone picture .screen-img {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  object-fit: cover;
+  object-position: center center;
+}
+.card-phone picture .screen-img.img-senator {
+  object-position: center 12%;
+}
 .screen-cal {
   margin: 10px 12px 0;
   border: 1px solid var(--border);
@@ -2074,6 +2098,8 @@ h3 {
   .card-body {
     padding: 16px;
     gap: 10px;
+    min-height: 228px;
+    grid-template-rows: 2.6em auto 1fr auto;
   }
   .deck-nav {
     width: 44px;
